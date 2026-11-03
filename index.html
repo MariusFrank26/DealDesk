@@ -618,6 +618,27 @@
     .header-row { justify-content: flex-start; }
   }
 
+  /* ── LANGUAGE TOGGLE ── */
+  .lang-toggle {
+    display: inline-flex;
+    border: 1px solid var(--graphite);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .lang-toggle button {
+    background: none;
+    border: 0;
+    color: var(--ash);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 7px 10px;
+    cursor: pointer;
+    transition: color .15s, background-color .15s;
+  }
+  .lang-toggle button + button { border-left: 1px solid var(--graphite); }
+  .lang-toggle button:hover { color: var(--mist); }
+  .lang-toggle button[aria-pressed="true"] { background: var(--obsidian); color: var(--paper); }
+
   @media print {
     body { background: #fff; color: #000; }
     body::before, header::after, .eyebrow::after { display: none; }
@@ -653,6 +674,10 @@
     </div>
     <div class="header-row">
       <span class="status"><i></i>Local only · nothing uploaded</span>
+      <div class="lang-toggle" role="group" aria-label="Language">
+        <button type="button" data-lang="en" aria-pressed="true">EN</button>
+        <button type="button" data-lang="de" aria-pressed="false">DE</button>
+      </div>
       <button type="button" class="ghost" id="guideBtn">Guide</button>
     </div>
   </div>
@@ -944,7 +969,7 @@ function persist() {
     renderStats();
     return true;
   }
-  catch { toast('Could not save in this browser. Export a backup from the Saved tab.'); return false; }
+  catch { toast(tr('Could not save in this browser. Export a backup from the Saved tab.')); return false; }
 }
 
 let toastTimer;
@@ -987,6 +1012,7 @@ function addRow(box, values = {}) {
     if (el) el.value = v;
   }
   box.appendChild(row);
+  applyLang(row);
 }
 
 function resetForm(kind) {
@@ -997,6 +1023,7 @@ function resetForm(kind) {
   setVal(f, 'date', localISO());
   if (kind === 'invoice') {
     setVal(f, 'due', plusDays(14));
+    setVal(f, 'lang', uiLang);
     setVal(f, 'invoice_no', `INV-${String(lib.counter).padStart(4, '0')}`);
   }
   refresh(kind);
@@ -1033,7 +1060,9 @@ function updateSplitCheck(d) {
   const mst = sumOf(d.contributors, 'master');
   const good = Math.abs(pub - 100) < 0.01 && Math.abs(mst - 100) < 0.01;
   el.className = `check ${good ? 'ok' : 'warn'}`;
-  el.textContent = `Publishing ${pct(pub)} · Master ${pct(mst)} ${good ? '✓ both total 100%' : '— each column should total 100%'}`;
+  el.textContent = uiLang === 'de'
+    ? `Publishing ${pct(pub)} · Master ${pct(mst)} ${good ? '✓ beide ergeben 100 %' : '— jede Spalte sollte 100 % ergeben'}`
+    : `Publishing ${pct(pub)} · Master ${pct(mst)} ${good ? '✓ both total 100%' : '— each column should total 100%'}`;
 }
 
 function renderSplit(d) {
@@ -1158,7 +1187,7 @@ function updateInvoiceCheck(d) {
   const el = $('#invoiceCheck');
   const issues = invoiceIssues(d);
   el.className = `check ${issues.length ? 'warn' : 'ok'}`;
-  el.textContent = issues.length ? issues.join(' ') : '✓ Looks complete.';
+  el.textContent = issues.length ? issues.map(tr).join(' ') : tr('✓ Looks complete.');
 }
 
 function renderInvoice(d) {
@@ -1232,9 +1261,9 @@ const renderers = { split: renderSplit, agreement: renderAgreement, invoice: ren
 
 function labelFor(item) {
   const d = item.data;
-  if (item.kind === 'split') return d.title || 'Untitled split';
-  if (item.kind === 'agreement') return d.project || 'Untitled agreement';
-  return `Invoice ${d.invoice_no || ''} to ${d.to_name || '—'}`;
+  if (item.kind === 'split') return d.title || tr('Untitled split');
+  if (item.kind === 'agreement') return d.project || tr('Untitled agreement');
+  return `${tr('Invoice')} ${d.invoice_no || ''} ${uiLang === 'de' ? 'an' : 'to'} ${d.to_name || '—'}`;
 }
 
 function saveCurrent(kind) {
@@ -1250,7 +1279,7 @@ function saveCurrent(kind) {
     f.dataset.id = item.id;
     if (kind === 'invoice') lib.counter++;
   }
-  if (persist()) toast(`Saved "${labelFor(item)}"`);
+  if (persist()) toast(`${tr('Saved')} "${labelFor(item)}"`);
 }
 
 function openItem(id) {
@@ -1268,11 +1297,11 @@ function renderLibrary() {
     <li class="lib-item">
       <div>
         <strong>${esc(labelFor(i))}</strong><br>
-        <small class="muted">${KIND_NAMES[i.kind]} · saved ${new Date(i.savedAt).toLocaleDateString()}</small>
+        <small class="muted">${tr(KIND_NAMES[i.kind])} · ${uiLang === 'de' ? 'gespeichert' : 'saved'} ${new Date(i.savedAt).toLocaleDateString(uiLang === 'de' ? 'de-DE' : undefined)}</small>
       </div>
       <div class="actions">
-        <button type="button" class="ghost" data-open="${i.id}">Open</button>
-        <button type="button" class="ghost" data-del="${i.id}">Delete</button>
+        <button type="button" class="ghost" data-open="${i.id}">${tr('Open')}</button>
+        <button type="button" class="ghost" data-del="${i.id}">${tr('Delete')}</button>
       </div>
     </li>`).join('');
 }
@@ -1291,7 +1320,7 @@ function onFormClick(e, kind) {
   }
   if (e.target.closest('[data-clear]')) {
     resetForm(kind);
-    toast('Started a new one');
+    toast(tr('Started a new one'));
     return;
   }
   if (e.target.closest('[data-print]')) window.print();
@@ -1315,7 +1344,9 @@ $('#libList').addEventListener('click', e => {
   if (open) openItem(open.dataset.open);
   if (del) {
     const item = lib.items.find(i => i.id === del.dataset.del);
-    if (item && confirm(`Delete "${labelFor(item)}"? This cannot be undone.`)) {
+    if (item && confirm(uiLang === 'de'
+      ? `„${labelFor(item)}“ löschen? Das kann nicht rückgängig gemacht werden.`
+      : `Delete "${labelFor(item)}"? This cannot be undone.`)) {
       lib.items = lib.items.filter(i => i.id !== item.id);
       persist();
       renderLibrary();
@@ -1350,12 +1381,203 @@ $('#importFile').addEventListener('change', async e => {
     lib.counter = Math.max(lib.counter, +incoming.counter || 0);
     persist();
     renderLibrary();
-    toast(`Imported ${added} item${added === 1 ? '' : 's'}`);
+    toast(uiLang === 'de'
+      ? `${added} ${added === 1 ? 'Eintrag' : 'Einträge'} importiert`
+      : `Imported ${added} item${added === 1 ? '' : 's'}`);
   } catch {
-    toast('That file could not be read as a Deal Desk backup.');
+    toast(tr('That file could not be read as a Deal Desk backup.'));
   }
   e.target.value = '';
 });
+
+// ── Interface language (EN / DE) ──
+// Static text is translated in place by applyLang(), keyed by its English source.
+// Documents keep their own language: agreements and split sheets stay English,
+// invoices use the Language field in their form.
+const LANG_KEY = 'deal-desk.ui-lang';
+let uiLang = 'en';
+try { uiLang = localStorage.getItem(LANG_KEY) === 'de' ? 'de' : 'en'; } catch {}
+
+const DE = {
+  'Splits · Agreements · Invoices': 'Splits · Verträge · Rechnungen',
+  'Local only · nothing uploaded': 'Nur lokal · nichts wird hochgeladen',
+  'Guide': 'Anleitung',
+  'Saved': 'Gespeichert',
+  'Splits': 'Splits',
+  'Invoices': 'Rechnungen',
+  'Split sheet': 'Split-Blatt',
+  'Producer agreement': 'Produzentenvertrag',
+  'Invoice': 'Rechnung',
+  'Song title': 'Songtitel',
+  'Artist': 'Künstler',
+  'Date': 'Datum',
+  'Contributors': 'Mitwirkende',
+  'Publishing is the songwriting share. Master is the recording share. Each column should total 100%.': 'Publishing ist der Songwriting-Anteil, Master der Aufnahme-Anteil. Jede Spalte sollte 100 % ergeben.',
+  '+ Add contributor': '+ Mitwirkende hinzufügen',
+  'Notes': 'Notizen',
+  'Save': 'Speichern',
+  'New': 'Neu',
+  'Print / save as PDF': 'Drucken / als PDF speichern',
+  'Name': 'Name',
+  'Role': 'Rolle',
+  'PRO': 'PRO',
+  'Publishing %': 'Publishing %',
+  'Master %': 'Master %',
+  'Email': 'E-Mail',
+  'Remove': 'Entfernen',
+  'Writer': 'Songwriter',
+  'Composer': 'Komponist',
+  'Lyricist': 'Texter',
+  'Producer': 'Produzent',
+  'Other': 'Andere',
+  'None': 'Keine',
+  'Description': 'Beschreibung',
+  'Qty': 'Menge',
+  'Rate': 'Einzelpreis',
+  'Legal name': 'Vollständiger Name',
+  'Quantity': 'Menge',
+  'Track title': 'Titel des Tracks',
+  'Deal type': 'Vertragsart',
+  'Flat fee': 'Pauschale',
+  'Points (royalty on master)': 'Points (Lizenzanteil am Master)',
+  'Flat fee + points': 'Pauschale + Points',
+  'Currency': 'Währung',
+  'Fee amount': 'Honorarbetrag',
+  'Points (% of net receipts)': 'Points (% der Nettoeinnahmen)',
+  'Rights': 'Rechte',
+  'Artist owns the master once paid in full': 'Künstler besitzt den Master nach vollständiger Zahlung',
+  'Producer keeps ownership, Artist gets a license': 'Produzent behält das Eigentum, Künstler erhält eine Lizenz',
+  'Exclusivity': 'Exklusivität',
+  'Non-exclusive': 'Nicht exklusiv',
+  'Exclusive to this Track': 'Exklusiv für diesen Track',
+  'License term (if licensed)': 'Lizenzlaufzeit (falls lizenziert)',
+  'perpetuity, or e.g. 10 years': 'unbefristet oder z. B. 10 Jahre',
+  'Pay fee within (days)': 'Zahlung fällig nach (Tagen)',
+  'Credit line': 'Credit-Zeile',
+  'Produced by ...': 'Produziert von ...',
+  'Deliverables': 'Lieferumfang',
+  'e.g. final stems and session files': 'z. B. finale Stems und Session-Dateien',
+  'Governing law (state or country)': 'Anwendbares Recht (Staat oder Land)',
+  'Language / Sprache': 'Sprache / Language',
+  'English': 'Englisch',
+  'Deutsch (German)': 'Deutsch',
+  'Tax treatment': 'Steuerliche Behandlung',
+  'VAT / Umsatzsteuer': 'Umsatzsteuer (USt)',
+  'Small business, no VAT / Kleinunternehmer (§ 19 UStG)': 'Kleinunternehmer, ohne USt (§ 19 UStG)',
+  'Reverse charge / Steuerschuldnerschaft': 'Reverse Charge / Steuerschuldnerschaft',
+  'Tax-free / steuerfrei': 'Steuerfrei',
+  'Invoice number': 'Rechnungsnummer',
+  'Issue date': 'Rechnungsdatum',
+  'Due date': 'Fällig am',
+  'Reference (track or agreement)': 'Referenz (Track oder Vertrag)',
+  'Service date / Leistungsdatum': 'Leistungsdatum',
+  'From (you)': 'Von (Sie)',
+  'Address': 'Adresse',
+  'Steuernummer / Tax number': 'Steuernummer',
+  'USt-IdNr. / VAT ID': 'USt-IdNr.',
+  'Bill to': 'Rechnungsempfänger',
+  'VAT ID of recipient (USt-IdNr. des Empfängers, needed for reverse charge)': 'USt-IdNr. des Empfängers (für Reverse Charge nötig)',
+  'Line items': 'Positionen',
+  '+ Add line': '+ Position hinzufügen',
+  'VAT rate % (Umsatzsteuersatz, e.g. 19 or 7)': 'USt-Satz in % (z. B. 19 oder 7)',
+  'Payment instructions / Zahlungshinweise': 'Zahlungshinweise',
+  'Bank transfer, PayPal, Venmo, etc.': 'Überweisung, PayPal, Venmo usw.',
+  'e.g. Rights transfer on full payment, per our agreement': 'z. B. Rechteübergang nach vollständiger Zahlung, laut Vertrag',
+  'Welcome to Deal Desk': 'Willkommen bei Deal Desk',
+  'What do you want to make first?': 'Was möchtest du zuerst erstellen?',
+  'Deal Desk creates three documents. Pick one to start, or take a short guided tour.': 'Deal Desk erstellt drei Dokumente. Wähle eines aus oder mach die kurze Tour.',
+  "Who wrote and produced the song, and how it's divided": 'Wer den Song geschrieben und produziert hat und wie er aufgeteilt ist',
+  'Fee, points and rights between producer and artist': 'Honorar, Points und Rechte zwischen Produzent und Künstler',
+  'Bill for your work, in English or German': 'Rechnung für deine Arbeit, auf Englisch oder Deutsch',
+  'Take the guided tour': 'Geführte Tour starten',
+  'Skip for now': 'Vorerst überspringen',
+  'Close tour': 'Tour schließen',
+  'Back': 'Zurück',
+  'Next': 'Weiter',
+  'Finish': 'Fertig',
+  'Export backup (.json)': 'Backup exportieren (.json)',
+  'Import backup': 'Backup importieren',
+  'Nothing saved yet. Use Save on any document to keep it here.': 'Noch nichts gespeichert. Mit „Speichern“ wird ein Dokument hier abgelegt.',
+  'Open': 'Öffnen',
+  'Delete': 'Löschen',
+  'Untitled split': 'Split-Blatt ohne Titel',
+  'Untitled agreement': 'Vertrag ohne Titel',
+  'Started a new one': 'Neues Dokument begonnen',
+  'Could not save in this browser. Export a backup from the Saved tab.': 'In diesem Browser konnte nicht gespeichert werden. Exportiere ein Backup im Tab „Gespeichert“.',
+  'That file could not be read as a Deal Desk backup.': 'Diese Datei ist kein lesbares Deal-Desk-Backup.',
+  'Add an invoice number.': 'Rechnungsnummer eintragen.',
+  'Add at least one line item.': 'Mindestens eine Position hinzufügen.',
+  'Add your name or company.': 'Name oder Firma eintragen.',
+  "Reverse charge needs the recipient's VAT ID.": 'Reverse Charge braucht die USt-IdNr. des Empfängers.',
+  'German invoices need a Steuernummer or USt-IdNr.': 'Deutsche Rechnungen brauchen eine Steuernummer oder USt-IdNr.',
+  "Add the recipient's name and address.": 'Name und Adresse des Empfängers eintragen.',
+  'Add the Leistungsdatum (service date).': 'Leistungsdatum eintragen.',
+  '✓ Looks complete.': '✓ Alles vollständig.',
+  'Step': 'Schritt',
+  'of': 'von',
+  'Local only': 'Nur lokal',
+  'Your saved documents': 'Deine gespeicherten Dokumente',
+  'Documents': 'Dokumente',
+  'Language': 'Sprache',
+  'Print': 'Drucken',
+  'Open tour': 'Tour öffnen'
+};
+
+// German tour copy, one entry per TOUR step (same order).
+const TOUR_DE = [
+  { title: 'Los geht’s', text: 'Drei Dokumente an einem Ort. Das dauert etwa eine Minute. Mit „Weiter“ geht es weiter, Esc beendet die Tour jederzeit.' },
+  { title: 'Mit dem Songtitel anfangen', text: 'Alle Dokumente hängen an einem Projektnamen. Die Vorschau rechts aktualisiert sich beim Tippen.' },
+  { title: 'Alle Beteiligten hinzufügen', text: 'Füge jede:n Songwriter:in und Produzent:in hinzu. Publishing (Songwriting-Anteil) und Master (Aufnahme-Anteil) werden getrennt eingetragen.' },
+  { title: 'Die Summen im Blick behalten', text: 'Die Anzeige wird grün, wenn Publishing und Master jeweils 100 % ergeben.' },
+  { title: 'Drucken oder als PDF speichern', text: 'Diese Vorschau wird genau so gedruckt. Exportieren und dann von allen unterschreiben lassen.' },
+  { title: 'Festlegen, wie der Produzent bezahlt wird', text: 'Pauschale, Points am Master oder beides. Points sind ein Anteil am Ertrag des Tracks.' },
+  { title: 'Entscheiden, wem der Master gehört', text: 'Der Künstler kann ihn nach vollständiger Zahlung besitzen, oder der Produzent behält ihn und vergibt eine Lizenz. Das ist die wichtigste Entscheidung.' },
+  { title: 'Zehn Standardklauseln', text: 'Namen eintragen, die Klauseln aktualisieren sich automatisch. Vor der Unterschrift sollte eine Anwältin oder ein Anwalt prüfen.' },
+  { title: 'Sprache wählen', text: 'Wähle Deutsch für deutsche Rechnungen. Beschriftungen, Zahlenformate und Datumsangaben wechseln auf Deutsch.' },
+  { title: 'Steuerliche Behandlung festlegen', text: 'Standard-USt verwendet den eingetragenen Satz. Kleinunternehmer und Reverse Charge drucken den nötigen Hinweis automatisch.' },
+  { title: 'Vor dem Versand prüfen', text: 'Diese Liste zeigt, was noch fehlt, z. B. Steuernummer oder Leistungsdatum bei deutschen Rechnungen.' },
+  { title: 'Alles wird in deinem Browser gespeichert', text: 'Mit „Speichern“ bleibt ein Dokument hier erhalten. Erstelle ab und zu ein Backup, denn das Löschen der Browserdaten entfernt alles.' },
+  { title: 'Alles erledigt', text: 'Diese Anleitung kannst du jederzeit über „Anleitung“ oben rechts wieder öffnen.' }
+];
+
+const tr = s => (uiLang === 'de' && DE[s]) || s;
+
+// Elements managed by JavaScript are skipped here and translated with tr() where they are written.
+const SKIP_I18N = '.doc, #libList, #tour, #toast, #splitCheck, #invoiceCheck, script, style';
+
+function applyLang(root = document.body) {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    if (node.parentElement.closest(SKIP_I18N)) continue;
+    if (node.__src === undefined) node.__src = node.nodeValue;
+    const src = node.__src.trim();
+    if (src) node.nodeValue = node.__src.replace(src, tr(src));
+  }
+  root.querySelectorAll('[placeholder], [aria-label]').forEach(el => {
+    if (el.closest(SKIP_I18N)) return;
+    el.__src ??= {};
+    for (const attr of ['placeholder', 'aria-label']) {
+      if (!el.hasAttribute(attr)) continue;
+      el.__src[attr] ??= el.getAttribute(attr);
+      el.setAttribute(attr, tr(el.__src[attr]));
+    }
+  });
+  document.documentElement.lang = uiLang;
+  $$('[data-lang]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lang === uiLang)));
+}
+
+function setLang(lang) {
+  uiLang = lang === 'de' ? 'de' : 'en';
+  try { localStorage.setItem(LANG_KEY, uiLang); } catch {}
+  applyLang();
+  for (const kind of Object.keys(forms)) refresh(kind);
+  if (!$('#library').hidden) renderLibrary();
+  if (tourOn) goStep(tourIndex);
+}
+
+$$('[data-lang]').forEach(b => b.addEventListener('click', () => setLang(b.dataset.lang)));
 
 // ── Header stats ──
 function countUp(el, to) {
@@ -1437,12 +1659,15 @@ function goStep(i) {
   if (step.tab) showTab(step.tab);
   const target = step.target && $(step.target);
   if (target) target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  $('#bubbleStep').textContent = `Step ${tourIndex + 1} of ${TOUR.length}`;
-  $('#bubbleTitle').textContent = step.title;
-  $('#bubbleText').textContent = step.text;
+  const copy = uiLang === 'de' ? { ...step, ...TOUR_DE[tourIndex] } : step;
+  $('#bubbleStep').textContent = `${tr('Step')} ${tourIndex + 1} ${tr('of')} ${TOUR.length}`;
+  $('#bubbleTitle').textContent = copy.title;
+  $('#bubbleText').textContent = copy.text;
+  $('#tourBack').textContent = tr('Back');
+  $('#tourClose').textContent = tr('Close tour');
   $('#dots').innerHTML = TOUR.map((_, n) => `<span class="dot${n === tourIndex ? ' on' : ''}"></span>`).join('');
   $('#tourBack').hidden = tourIndex === 0;
-  $('#tourNext').textContent = tourIndex === TOUR.length - 1 ? 'Finish' : 'Next';
+  $('#tourNext').textContent = tourIndex === TOUR.length - 1 ? tr('Finish') : tr('Next');
   placeTour();
   setTimeout(placeTour, 400);
 }
@@ -1521,6 +1746,7 @@ addEventListener('scroll', placeTour, true);
 // Start
 for (const kind of Object.keys(forms)) resetForm(kind);
 showTab('split');
+applyLang();
 renderStats();
 if (!guideSeen()) openWelcome();
 </script>
