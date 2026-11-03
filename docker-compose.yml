@@ -1,0 +1,6 @@
+services:
+  dealdesk:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8090:80"
